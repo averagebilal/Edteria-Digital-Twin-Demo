@@ -1,0 +1,14 @@
+{
+  "productionAssets": {
+    "logo": "/assets/branding/esteria-logo.svg",
+    "masterplan": "/assets/masterplan/masterplan.webp",
+    "building": "/assets/building/building-front.webp",
+    "masterplanOverlay": "/assets/geometry/masterplan-building-overlay.svg",
+    "floorOverlays": "/assets/geometry/floors/floor-01.svg ... floor-05.svg",
+    "apartmentOverlays": "/assets/geometry/apartments/floor-01-apartments.svg ... floor-05-apartments.svg",
+    "walkthroughScenes": "/assets/walkthrough/*.webp",
+    "interactionData": "src/data/esteriaInteractionMap.json"
+  },
+  "referenceOnly": "design-reference/**",
+  "important": "Do not render or import design-reference files in production. They are for Cursor visual/placement reference only."
+}
