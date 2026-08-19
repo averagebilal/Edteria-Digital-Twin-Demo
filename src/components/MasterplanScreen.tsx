@@ -1,6 +1,8 @@
 import { ASSETS, HIGHLIGHT_COLOR, HOVER_OPACITY, MASTERPLAN_DEFAULT_OPACITY, SCENE_CONFIG } from '../assets'
 import interactionMap from '../data/esteriaInteractionMap.json'
+import { isTouchUI } from '../mobileViewport'
 import Stage from './Stage'
+import type { MouseEvent } from 'react'
 
 type MasterplanScreenProps = {
   hovered: boolean
@@ -13,8 +15,24 @@ export default function MasterplanScreen({
   onHoverChange,
   onSelectBuilding,
 }: MasterplanScreenProps) {
+  const touchUI = isTouchUI()
+
+  const handleBuildingClick = (event: MouseEvent) => {
+    event.stopPropagation()
+    if (touchUI && !hovered) {
+      onHoverChange(true)
+      return
+    }
+    onSelectBuilding()
+  }
+
   return (
-    <div className="scene">
+    <div
+      className="scene"
+      onClick={() => {
+        if (touchUI && hovered) onHoverChange(false)
+      }}
+    >
       <Stage focalX={SCENE_CONFIG.masterplan.focalX} focalY={SCENE_CONFIG.masterplan.focalY}>
         <img
           className="scene-image"
@@ -38,9 +56,13 @@ export default function MasterplanScreen({
               fillOpacity: hovered ? HOVER_OPACITY : MASTERPLAN_DEFAULT_OPACITY,
               strokeOpacity: hovered ? 1 : 0,
             }}
-            onMouseEnter={() => onHoverChange(true)}
-            onMouseLeave={() => onHoverChange(false)}
-            onClick={onSelectBuilding}
+            onMouseEnter={() => {
+              if (!touchUI) onHoverChange(true)
+            }}
+            onMouseLeave={() => {
+              if (!touchUI) onHoverChange(false)
+            }}
+            onClick={handleBuildingClick}
           />
         </svg>
         <div

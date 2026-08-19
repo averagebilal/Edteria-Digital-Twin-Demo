@@ -10,6 +10,15 @@ function isIOSDevice() {
 
 export const IS_IOS = isIOSDevice()
 
+export function isTouchUI() {
+  if (typeof window === 'undefined') return false
+  return (
+    IS_IOS ||
+    window.matchMedia('(pointer: coarse)').matches ||
+    window.matchMedia('(hover: none)').matches
+  )
+}
+
 export function getViewportSize() {
   const visual = window.visualViewport
   return {
@@ -23,12 +32,19 @@ export function getViewportSize() {
 export function applyVisualViewportToRoot() {
   const root = document.getElementById(ROOT_ID)
   if (!root) return
-  const { width, height, offsetTop, offsetLeft } = getViewportSize()
-  root.style.position = 'fixed'
-  root.style.width = `${Math.max(width, 1)}px`
+  const { width, height } = getViewportSize()
+  const scrollMode = document.documentElement.classList.contains('chrome-scroll')
+  root.style.width = '100%'
   root.style.height = `${Math.max(height, 1)}px`
-  root.style.top = `${offsetTop}px`
-  root.style.left = `${offsetLeft}px`
+  if (scrollMode) {
+    root.style.position = 'sticky'
+    root.style.top = '0px'
+    root.style.left = '0px'
+  } else {
+    root.style.position = 'fixed'
+    root.style.top = '0px'
+    root.style.left = '0px'
+  }
   document.documentElement.style.setProperty('--app-width', `${width}px`)
   document.documentElement.style.setProperty('--app-height', `${height}px`)
 }
@@ -40,11 +56,13 @@ export function subscribeVisualViewport(onChange: () => void) {
   visual?.addEventListener('scroll', onChange)
   window.addEventListener('resize', onChange)
   window.addEventListener('orientationchange', onChange)
+  window.addEventListener('scroll', onChange, { passive: true })
   return () => {
     visual?.removeEventListener('resize', onChange)
     visual?.removeEventListener('scroll', onChange)
     window.removeEventListener('resize', onChange)
     window.removeEventListener('orientationchange', onChange)
+    window.removeEventListener('scroll', onChange)
   }
 }
 
@@ -64,18 +82,13 @@ export async function requestAppFullscreen() {
   }
 }
 
+export function enableSafariChromeScroll() {
+  document.documentElement.classList.add('chrome-scroll')
+  applyVisualViewportToRoot()
+}
+
 export function expandMobileChrome() {
+  if (isTouchUI()) enableSafariChromeScroll()
   void requestAppFullscreen()
-  const html = document.documentElement
-  const extra = Math.max(80, Math.round(window.innerHeight * 0.12))
-  html.classList.add('allow-chrome-collapse')
-  html.style.minHeight = `${window.innerHeight + extra}px`
-  window.scrollTo(0, extra)
-  window.setTimeout(() => {
-    applyVisualViewportToRoot()
-    html.style.minHeight = ''
-    html.classList.remove('allow-chrome-collapse')
-    window.scrollTo(0, 0)
-    applyVisualViewportToRoot()
-  }, 180)
+  applyVisualViewportToRoot()
 }
