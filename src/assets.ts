@@ -21,27 +21,27 @@ export const ASSETS = {
 
 export const ROOM_ASSETS: Record<RoomId, { src: string; label: string; icon: string }> = {
   lounge: {
-    src: '/assets/walkthrough-360/lounge.webp',
+    src: '/assets/walkthrough-360/lounge.jpg',
     label: 'Living Room',
     icon: '/assets/walkthrough/icons/lounge.png',
   },
   balcony: {
-    src: '/assets/walkthrough-360/balcony.webp',
+    src: '/assets/walkthrough-360/balcony.jpg',
     label: 'Balcony',
     icon: '/assets/walkthrough/icons/balcony.png',
   },
   kitchen: {
-    src: '/assets/walkthrough-360/kitchen.webp',
+    src: '/assets/walkthrough-360/kitchen.png',
     label: 'Kitchen',
     icon: '/assets/walkthrough/icons/kitchen.png',
   },
   master: {
-    src: '/assets/walkthrough-360/master.webp',
+    src: '/assets/walkthrough-360/master.jpg',
     label: 'Bedroom',
     icon: '/assets/walkthrough/icons/master.png',
   },
   bathroom: {
-    src: '/assets/walkthrough-360/bathroom.webp',
+    src: '/assets/walkthrough-360/bathroom.jpg',
     label: 'Bathroom',
     icon: '/assets/walkthrough/icons/bathroom.png',
   },

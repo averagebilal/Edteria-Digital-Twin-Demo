@@ -10,13 +10,14 @@ import * as THREE from 'three'
 import { ROOM_ASSETS } from '../assets'
 import {
   DEFAULT_FOV,
-  equirectToWorld,
+  lonLatToSphere,
   MAX_FOV,
   MAX_LATITUDE,
   MIN_FOV,
   MIN_LATITUDE,
   ROOM_HOTSPOTS,
   ROOM_VIEW_CONFIG,
+  uvToSphere,
 } from '../data/walkthrough360'
 import type { RoomId } from '../types'
 
@@ -51,13 +52,7 @@ function isUiControl(target: EventTarget | null) {
 }
 
 function lookTarget(longitude: number, latitude: number) {
-  const lonRad = THREE.MathUtils.degToRad(longitude)
-  const latRad = THREE.MathUtils.degToRad(latitude)
-  return new THREE.Vector3(
-    Math.cos(latRad) * Math.sin(lonRad),
-    Math.sin(latRad),
-    Math.cos(latRad) * Math.cos(lonRad),
-  )
+  return lonLatToSphere(longitude, latitude, 1)
 }
 
 export default function WalkthroughScreen({
@@ -129,7 +124,7 @@ export default function WalkthroughScreen({
 
     camera.getWorldDirection(cameraDirRef.current)
     const next = ROOM_HOTSPOTS[room].map((hotspot) => {
-      const position = equirectToWorld(hotspot.u, hotspot.v)
+      const position = uvToSphere(hotspot.u, hotspot.v)
       const facing = projectVecRef.current.copy(position).normalize().dot(cameraDirRef.current)
       const projected = position.project(camera)
       return {
@@ -169,7 +164,9 @@ export default function WalkthroughScreen({
         url,
         (texture) => {
           texture.colorSpace = THREE.SRGBColorSpace
-          texture.minFilter = THREE.LinearFilter
+          texture.anisotropy = rendererRef.current?.capabilities.getMaxAnisotropy() ?? 8
+          texture.generateMipmaps = true
+          texture.minFilter = THREE.LinearMipmapLinearFilter
           texture.magFilter = THREE.LinearFilter
           texturesRef.current.set(url, texture)
           loadingUrlsRef.current.delete(url)
@@ -224,7 +221,7 @@ export default function WalkthroughScreen({
     renderer.domElement.className = 'pano-canvas'
     viewport.insertBefore(renderer.domElement, viewport.firstChild)
 
-    const geometry = new THREE.SphereGeometry(100, 64, 40)
+    const geometry = new THREE.SphereGeometry(100, 96, 64)
     geometry.scale(-1, 1, 1)
     const material = new THREE.MeshBasicMaterial()
     const mesh = new THREE.Mesh(geometry, material)

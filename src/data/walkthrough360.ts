@@ -111,19 +111,31 @@ export const ROOM_HOTSPOTS: Record<RoomId, RoomHotspot[]> = {
   ],
 }
 
-export function equirectToWorld(
-  u: number,
-  v: number,
-  radius = HOTSPOT_RADIUS,
-  yawOffset = PANORAMA_YAW_OFFSET,
-) {
-  const lon = u * 360 - 180 + yawOffset
-  const lat = 90 - v * 180
-  const lonRad = THREE.MathUtils.degToRad(lon)
-  const latRad = THREE.MathUtils.degToRad(lat)
+function wrapU(u: number) {
+  return THREE.MathUtils.euclideanModulo(u + PANORAMA_YAW_OFFSET / 360, 1)
+}
+
+/**
+ * Convert equirect UVs into a point on the inverted SphereGeometry used
+ * by the 360 viewer. This must match Three.js sphere UVs after scale(-1,1,1)
+ * so hotspots sit on the same pixels as the reference SVG.
+ */
+export function uvToSphere(u: number, v: number, radius = HOTSPOT_RADIUS) {
+  const phi = wrapU(u) * Math.PI * 2
+  const theta = THREE.MathUtils.clamp(v, 0.001, 0.999) * Math.PI
   return new THREE.Vector3(
-    radius * Math.cos(latRad) * Math.sin(lonRad),
-    radius * Math.sin(latRad),
-    radius * Math.cos(latRad) * Math.cos(lonRad),
+    radius * Math.cos(phi) * Math.sin(theta),
+    radius * Math.cos(theta),
+    radius * Math.sin(phi) * Math.sin(theta),
   )
+}
+
+export function lonLatToSphere(
+  longitude: number,
+  latitude: number,
+  radius = 1,
+) {
+  const u = longitude / 360 + 0.5
+  const v = 0.5 - latitude / 180
+  return uvToSphere(u, v, radius)
 }
