@@ -6,6 +6,7 @@ import {
   SCENE_CONFIG,
 } from '../assets'
 import interactionMap from '../data/esteriaInteractionMap.json'
+import { getApartmentInfo } from '../data/apartmentCatalog'
 import type { BuildingMode, FloorId } from '../types'
 import ApartmentModal from './ApartmentModal'
 import Stage from './Stage'
@@ -60,6 +61,7 @@ export default function BuildingScreen({
     buildingMode === 'apartment-selection' && selectedFloor
       ? interactionMap.apartments[selectedFloor]
       : []
+  const selectedInfo = getApartmentInfo(selectedApartment)
 
   return (
     <div className="scene">
@@ -121,8 +123,9 @@ export default function BuildingScreen({
           ← Change Floor
         </button>
       )}
-      {apartmentModalOpen && (
+      {apartmentModalOpen && selectedApartment && (
         <ApartmentModal
+          info={selectedInfo}
           onClose={onCloseModal}
           onWalkthrough={onStartWalkthrough}
         />

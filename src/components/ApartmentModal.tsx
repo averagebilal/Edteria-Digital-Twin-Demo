@@ -1,18 +1,20 @@
-import { APARTMENT_INFO } from '../assets'
+import type { ApartmentInfo } from '../data/apartmentCatalog'
 
 type ApartmentModalProps = {
+  info: ApartmentInfo
   onClose: () => void
   onWalkthrough: () => void
 }
 
 export default function ApartmentModal({
+  info,
   onClose,
   onWalkthrough,
 }: ApartmentModalProps) {
   return (
     <div className="apartment-modal" role="dialog" aria-labelledby="apartment-title">
       <div className="apartment-modal-header">
-        <h2 id="apartment-title">{APARTMENT_INFO.title}</h2>
+        <h2 id="apartment-title">{info.title}</h2>
         <button
           type="button"
           className="apartment-modal-close"
@@ -32,22 +34,22 @@ export default function ApartmentModal({
       </div>
 
       <div className="apartment-stat apartment-stat-wide">
-        <strong>{APARTMENT_INFO.area}</strong>
-        <span>{APARTMENT_INFO.areaLabel}</span>
+        <strong>{info.area}</strong>
+        <span>{info.areaLabel}</span>
       </div>
 
       <div className="apartment-stat-row">
         <div className="apartment-stat">
-          <strong>{APARTMENT_INFO.floors}</strong>
+          <strong>{info.floors}</strong>
           <span>Floors</span>
         </div>
         <div className="apartment-stat">
-          <strong>{APARTMENT_INFO.rooms}</strong>
+          <strong>{info.rooms}</strong>
           <span>Rooms</span>
         </div>
         <div className="apartment-stat">
-          <strong>{APARTMENT_INFO.location}</strong>
-          <span>Location</span>
+          <strong>{info.location}</strong>
+          <span>View</span>
         </div>
       </div>
 

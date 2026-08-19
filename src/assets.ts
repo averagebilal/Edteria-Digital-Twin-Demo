@@ -48,15 +48,6 @@ export const DEFAULT_OPACITY = 0.24
 export const HOVER_OPACITY = 0.74
 export const MASTERPLAN_DEFAULT_OPACITY = 0
 
-export const APARTMENT_INFO = {
-  title: 'Penthouse',
-  area: '1850 m²',
-  areaLabel: 'Apartments Area',
-  floors: '2',
-  rooms: '4',
-  location: '7',
-}
-
 export function preloadImage(src: string): Promise<void> {
   return new Promise((resolve) => {
     const img = new Image()
