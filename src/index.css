@@ -34,36 +34,22 @@ body {
   user-select: none;
 }
 
-html.allow-chrome-collapse,
-html.chrome-scroll {
-  overflow-x: hidden;
-  overflow-y: auto;
-  height: auto;
-}
-
 html.chrome-scroll,
 html.chrome-scroll body {
   overflow-x: hidden;
   overflow-y: auto;
-  height: auto;
-  overscroll-behavior-x: none;
+  height: 100%;
 }
 
 html.chrome-scroll body {
-  min-height: calc(var(--app-height, 100svh) + 128px);
+  min-height: calc(100% + 28px);
 }
 
-html.chrome-scroll #root {
-  position: sticky;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: var(--app-height, 100svh);
-  touch-action: pan-y;
-}
-
-html.chrome-scroll .app {
-  touch-action: pan-y;
+html.chrome-locked,
+html.chrome-locked body {
+  overflow: hidden;
+  height: 100%;
+  min-height: 100%;
 }
 
 #root {

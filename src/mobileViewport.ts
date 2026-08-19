@@ -1,4 +1,5 @@
 const ROOT_ID = 'root'
+const SCROLL_ROOM = 28
 
 function isIOSDevice() {
   if (typeof navigator === 'undefined') return false
@@ -29,40 +30,82 @@ export function getViewportSize() {
   }
 }
 
+let chromeBaseline = 0
+let clampingScroll = false
+
 export function applyVisualViewportToRoot() {
   const root = document.getElementById(ROOT_ID)
   if (!root) return
   const { width, height } = getViewportSize()
-  const scrollMode = document.documentElement.classList.contains('chrome-scroll')
+  root.style.position = 'fixed'
+  root.style.top = '0px'
+  root.style.left = '0px'
   root.style.width = '100%'
   root.style.height = `${Math.max(height, 1)}px`
-  if (scrollMode) {
-    root.style.position = 'sticky'
-    root.style.top = '0px'
-    root.style.left = '0px'
-  } else {
-    root.style.position = 'fixed'
-    root.style.top = '0px'
-    root.style.left = '0px'
-  }
   document.documentElement.style.setProperty('--app-width', `${width}px`)
   document.documentElement.style.setProperty('--app-height', `${height}px`)
 }
 
+function clampChromeScroll() {
+  if (clampingScroll) return
+  if (!document.documentElement.classList.contains('chrome-scroll')) return
+  if (document.documentElement.classList.contains('chrome-locked')) {
+    if (window.scrollY !== 0) {
+      clampingScroll = true
+      window.scrollTo(0, 0)
+      clampingScroll = false
+    }
+    return
+  }
+  if (window.scrollY > SCROLL_ROOM) {
+    clampingScroll = true
+    window.scrollTo(0, SCROLL_ROOM)
+    clampingScroll = false
+  }
+}
+
+function maybeLockAfterChromeHide() {
+  if (!document.documentElement.classList.contains('chrome-scroll')) return
+  if (document.documentElement.classList.contains('chrome-locked')) return
+  const { height } = getViewportSize()
+  if (chromeBaseline > 0 && height >= chromeBaseline + 20) {
+    document.documentElement.classList.add('chrome-locked')
+    clampingScroll = true
+    window.scrollTo(0, 0)
+    clampingScroll = false
+  }
+}
+
+function onViewportChange() {
+  applyVisualViewportToRoot()
+  maybeLockAfterChromeHide()
+  clampChromeScroll()
+}
+
 export function subscribeVisualViewport(onChange: () => void) {
+  const handle = () => {
+    onViewportChange()
+    onChange()
+  }
+  const handleOrientation = () => {
+    chromeBaseline = 0
+    document.documentElement.classList.remove('chrome-locked')
+    handle()
+    chromeBaseline = getViewportSize().height
+  }
   applyVisualViewportToRoot()
   const visual = window.visualViewport
-  visual?.addEventListener('resize', onChange)
-  visual?.addEventListener('scroll', onChange)
-  window.addEventListener('resize', onChange)
-  window.addEventListener('orientationchange', onChange)
-  window.addEventListener('scroll', onChange, { passive: true })
+  visual?.addEventListener('resize', handle)
+  visual?.addEventListener('scroll', handle)
+  window.addEventListener('resize', handle)
+  window.addEventListener('orientationchange', handleOrientation)
+  window.addEventListener('scroll', handle, { passive: true })
   return () => {
-    visual?.removeEventListener('resize', onChange)
-    visual?.removeEventListener('scroll', onChange)
-    window.removeEventListener('resize', onChange)
-    window.removeEventListener('orientationchange', onChange)
-    window.removeEventListener('scroll', onChange)
+    visual?.removeEventListener('resize', handle)
+    visual?.removeEventListener('scroll', handle)
+    window.removeEventListener('resize', handle)
+    window.removeEventListener('orientationchange', handleOrientation)
+    window.removeEventListener('scroll', handle)
   }
 }
 
@@ -84,6 +127,8 @@ export async function requestAppFullscreen() {
 
 export function enableSafariChromeScroll() {
   document.documentElement.classList.add('chrome-scroll')
+  document.documentElement.classList.remove('chrome-locked')
+  chromeBaseline = getViewportSize().height
   applyVisualViewportToRoot()
 }
 
