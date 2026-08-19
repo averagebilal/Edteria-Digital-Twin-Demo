@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 import { preloadImage, ROOM_ASSETS, ROOM_VIEW_CONFIG } from '../assets'
 import interactionMap from '../data/esteriaInteractionMap.json'
 import type { RoomId } from '../types'
@@ -7,6 +7,7 @@ type WalkthroughScreenProps = {
   currentRoom: RoomId
   onNavigate: (room: RoomId) => void
   onExit: () => void
+  audioControl?: ReactNode
 }
 
 const DRAG_THRESHOLD = 7
@@ -23,10 +24,15 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }
 
+function isHotspotTarget(target: EventTarget | null) {
+  return target instanceof Element && Boolean(target.closest('.room-pointer'))
+}
+
 export default function WalkthroughScreen({
   currentRoom,
   onNavigate,
   onExit,
+  audioControl,
 }: WalkthroughScreenProps) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -61,6 +67,7 @@ export default function WalkthroughScreen({
     const { x, y, zoom } = panRef.current
     const scale = coverRef.current * zoom
     canvas.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`
+    canvas.style.setProperty('--scene-scale', String(scale))
   }, [])
 
   const clampPan = useCallback((room: RoomId = visibleRoom) => {
@@ -196,6 +203,7 @@ export default function WalkthroughScreen({
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return
+    if (isHotspotTarget(event.target)) return
     stopInertia()
     const viewport = viewportRef.current
     if (!viewport) return
@@ -291,7 +299,8 @@ export default function WalkthroughScreen({
   }
 
   const handleHotspotClick = (destination: RoomId) => {
-    if (dragRef.current.moved || fading) return
+    if (fading) return
+    stopInertia()
     onNavigate(destination)
   }
 
@@ -326,7 +335,11 @@ export default function WalkthroughScreen({
                   type="button"
                   className="room-pointer"
                   style={{ left: `${point.xPercent}%`, top: `${point.yPercent}%` }}
-                  onClick={() => handleHotspotClick(destination)}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    handleHotspotClick(destination)
+                  }}
                   disabled={fading}
                 >
                   <span
@@ -350,12 +363,17 @@ export default function WalkthroughScreen({
         </div>
       )}
 
-      <button type="button" className="reset-view" onClick={resetView}>
-        Reset View
-      </button>
-      <button type="button" className="exit-walkthrough" onClick={onExit}>
-        Exit Walkthrough
-      </button>
+      <div className="walkthrough-topbar">
+        <button type="button" className="back-control" onClick={onExit}>
+          ← Exit Walkthrough
+        </button>
+        <div className="walkthrough-topbar-right">
+          {audioControl}
+          <button type="button" className="reset-view" onClick={resetView}>
+            Reset View
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

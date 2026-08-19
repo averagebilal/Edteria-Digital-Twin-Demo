@@ -121,7 +121,7 @@ export default function App() {
 
   return (
     <LandscapeGuard onPortraitChange={handlePortraitChange}>
-      <div className={`app ${screen === 'walkthrough' ? 'is-walkthrough' : ''}`}>
+      <div className="app">
         <audio
           ref={audioRef}
           src={ASSETS.audio}
@@ -170,10 +170,17 @@ export default function App() {
             currentRoom={currentRoom}
             onNavigate={setCurrentRoom}
             onExit={handleExitWalkthrough}
+            audioControl={
+              <AudioControl
+                enabled={audioEnabled && !portrait}
+                available={audioAvailable}
+                onToggle={handleToggleAudio}
+              />
+            }
           />
         )}
 
-        {screen !== 'opening' && (
+        {screen !== 'opening' && screen !== 'walkthrough' && (
           <AudioControl
             enabled={audioEnabled && !portrait}
             available={audioAvailable}

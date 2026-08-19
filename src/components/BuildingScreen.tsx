@@ -117,7 +117,7 @@ export default function BuildingScreen({
       </Stage>
       <img className="brand-logo" src={ASSETS.logo} alt="ESTERIA" draggable={false} />
       {buildingMode === 'apartment-selection' && (
-        <button type="button" className="change-floor" onClick={onChangeFloor}>
+        <button type="button" className="back-control change-floor" onClick={onChangeFloor}>
           ← Change Floor
         </button>
       )}
