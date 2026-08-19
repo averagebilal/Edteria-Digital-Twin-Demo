@@ -20,11 +20,9 @@
 }
 
 html,
-body,
-#root {
+body {
   width: 100%;
   height: 100%;
-  height: 100dvh;
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
@@ -34,6 +32,28 @@ body,
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
+}
+
+html.allow-chrome-collapse {
+  overflow: auto;
+  min-height: 100%;
+}
+
+#root {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.app {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
 }
 
 button {
@@ -53,15 +73,6 @@ img {
   display: block;
   user-select: none;
   -webkit-user-drag: none;
-}
-
-.app {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  height: 100dvh;
-  overflow: hidden;
-  background: var(--bg);
 }
 
 .orientation-overlay {
@@ -115,7 +126,6 @@ img {
   top: 0;
   left: 0;
   transform-origin: top left;
-  will-change: transform;
 }
 
 .scene-image {
@@ -472,9 +482,13 @@ img {
   top: 0;
   left: 0;
   transform-origin: top left;
-  will-change: transform;
   opacity: 1;
   transition: opacity 280ms ease;
+}
+
+.panorama-viewport.is-dragging .panorama-canvas {
+  will-change: transform;
+  transition: none;
 }
 
 .panorama-canvas.is-fading {
@@ -568,6 +582,7 @@ img {
   overflow: hidden;
   border-radius: 50%;
   border: 3px solid rgba(255, 255, 255, 0.95);
+  background-color: rgba(12, 13, 15, 0.78);
   background-size: cover;
   background-position: center;
   box-shadow:

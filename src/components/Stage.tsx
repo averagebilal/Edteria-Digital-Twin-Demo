@@ -28,11 +28,13 @@ export default function Stage({
     const update = () => {
       const viewportWidth = viewport.clientWidth
       const viewportHeight = viewport.clientHeight
+      if (viewportWidth < 8 || viewportHeight < 8) return
       const scale = Math.max(viewportWidth / width, viewportHeight / height)
+      if (!Number.isFinite(scale) || scale <= 0) return
       const renderedWidth = width * scale
       const renderedHeight = height * scale
       setTransform({
-        scale: Number.isFinite(scale) && scale > 0 ? scale : 1,
+        scale,
         x: (viewportWidth - renderedWidth) * focalX,
         y: (viewportHeight - renderedHeight) * focalY,
       })

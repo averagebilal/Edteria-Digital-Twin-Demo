@@ -6,6 +6,12 @@ import LandscapeGuard from './components/LandscapeGuard'
 import MasterplanScreen from './components/MasterplanScreen'
 import OpeningScreen from './components/OpeningScreen'
 import WalkthroughScreen from './components/WalkthroughScreen'
+import {
+  applyVisualViewportToRoot,
+  expandMobileChrome,
+  IS_IOS,
+  subscribeVisualViewport,
+} from './mobileViewport'
 import type { BuildingMode, FloorId, RoomId, Screen } from './types'
 
 export default function App() {
@@ -28,6 +34,8 @@ export default function App() {
   useEffect(() => {
     void preloadImage(ASSETS.masterplan).then(() => setOpeningReady(true))
   }, [])
+
+  useEffect(() => subscribeVisualViewport(applyVisualViewportToRoot), [])
 
   const playAudio = useCallback(async () => {
     const audio = audioRef.current
@@ -57,6 +65,7 @@ export default function App() {
   }, [])
 
   const handleStart = useCallback(() => {
+    expandMobileChrome()
     void playAudio()
     void preloadImage(ASSETS.building)
     setOpeningFade(true)
@@ -71,7 +80,11 @@ export default function App() {
     setSelectedApartment(null)
     setApartmentModalOpen(false)
     setScreen('building')
-    void preloadImages(WALKTHROUGH_ROOMS.map((room) => ROOM_ASSETS[room].src))
+    if (IS_IOS) {
+      void preloadImage(ROOM_ASSETS.lounge.src)
+    } else {
+      void preloadImages(WALKTHROUGH_ROOMS.map((room) => ROOM_ASSETS[room].src))
+    }
   }, [])
 
   const handleSelectFloor = useCallback((floor: FloorId) => {
@@ -97,8 +110,11 @@ export default function App() {
   }, [])
 
   const handleStartWalkthrough = useCallback(() => {
+    expandMobileChrome()
     setCurrentRoom('lounge')
-    setScreen('walkthrough')
+    void preloadImage(ROOM_ASSETS.lounge.src).finally(() => {
+      setScreen('walkthrough')
+    })
   }, [])
 
   const handleExitWalkthrough = useCallback(() => {

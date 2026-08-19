@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 import { preloadImage, ROOM_ASSETS, ROOM_VIEW_CONFIG } from '../assets'
 import interactionMap from '../data/esteriaInteractionMap.json'
+import { IS_IOS } from '../mobileViewport'
 import type { RoomId } from '../types'
 
 type WalkthroughScreenProps = {
@@ -16,6 +17,7 @@ const MIN_ZOOM = 1
 const MAX_ZOOM = 1.35
 const INERTIA_DECAY = 0.92
 const INERTIA_MIN = 0.18
+const PHOTO_THUMBS = !IS_IOS
 
 let dragHintShown = false
 
@@ -58,26 +60,29 @@ export default function WalkthroughScreen({
   const [dragging, setDragging] = useState(false)
   const [showHint, setShowHint] = useState(!dragHintShown)
 
-  const [imgW, imgH] = interactionMap.walkthrough[visibleRoom].referenceSize
   const points = interactionMap.walkthrough[visibleRoom].points
 
   const applyTransform = useCallback(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    const viewport = viewportRef.current
+    if (!canvas || !viewport) return
+    if (viewport.clientWidth < 8 || viewport.clientHeight < 8) return
+    const [width, height] = interactionMap.walkthrough[visibleRoom].referenceSize
     const { x, y, zoom } = panRef.current
-    const scale = coverRef.current * zoom
-    canvas.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`
-    canvas.style.setProperty('--scene-scale', String(scale))
-  }, [])
+    const cover = coverRef.current
+    canvas.style.width = `${width * cover}px`
+    canvas.style.height = `${height * cover}px`
+    canvas.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${zoom})`
+    canvas.style.setProperty('--scene-scale', String(zoom))
+  }, [visibleRoom])
 
   const clampPan = useCallback((room: RoomId = visibleRoom) => {
     const viewport = viewportRef.current
-    if (!viewport) return
+    if (!viewport || viewport.clientWidth < 8 || viewport.clientHeight < 8) return
     const [width, height] = interactionMap.walkthrough[room].referenceSize
     const zoom = panRef.current.zoom
-    const scale = coverRef.current * zoom
-    const displayedWidth = width * scale
-    const displayedHeight = height * scale
+    const displayedWidth = width * coverRef.current * zoom
+    const displayedHeight = height * coverRef.current * zoom
     panRef.current.x = clamp(
       panRef.current.x,
       viewport.clientWidth - displayedWidth,
@@ -93,13 +98,14 @@ export default function WalkthroughScreen({
   const applyRoomView = useCallback(
     (room: RoomId) => {
       const viewport = viewportRef.current
-      if (!viewport) return
+      if (!viewport || viewport.clientWidth < 8 || viewport.clientHeight < 8) return
       const [width, height] = interactionMap.walkthrough[room].referenceSize
       const config = ROOM_VIEW_CONFIG[room]
       const cover = Math.max(
         viewport.clientWidth / width,
         viewport.clientHeight / height,
       )
+      if (!Number.isFinite(cover) || cover <= 0) return
       coverRef.current = cover
       panRef.current.zoom = config.initialZoom
       const scale = cover * config.initialZoom
@@ -129,12 +135,19 @@ export default function WalkthroughScreen({
     if (!viewport) return
 
     const onResize = () => {
+      if (viewport.clientWidth < 8 || viewport.clientHeight < 8) return
       const [width, height] = interactionMap.walkthrough[visibleRoom].referenceSize
       const nextCover = Math.max(
         viewport.clientWidth / width,
         viewport.clientHeight / height,
       )
+      if (!Number.isFinite(nextCover) || nextCover <= 0) return
       const oldScale = coverRef.current * panRef.current.zoom
+      if (!Number.isFinite(oldScale) || oldScale <= 0) {
+        coverRef.current = nextCover
+        applyRoomView(visibleRoom)
+        return
+      }
       coverRef.current = nextCover
       const newScale = nextCover * panRef.current.zoom
       const centerX = viewport.clientWidth / 2
@@ -150,11 +163,13 @@ export default function WalkthroughScreen({
     const observer = new ResizeObserver(onResize)
     observer.observe(viewport)
     window.addEventListener('orientationchange', onResize)
+    window.visualViewport?.addEventListener('resize', onResize)
     return () => {
       observer.disconnect()
       window.removeEventListener('orientationchange', onResize)
+      window.visualViewport?.removeEventListener('resize', onResize)
     }
-  }, [applyTransform, clampPan, visibleRoom])
+  }, [applyRoomView, applyTransform, clampPan, visibleRoom])
 
   useEffect(() => {
     if (currentRoom === visibleRoom) return
@@ -201,31 +216,7 @@ export default function WalkthroughScreen({
     inertiaRef.current = requestAnimationFrame(step)
   }, [applyTransform, clampPan, stopInertia])
 
-  const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return
-    if (isHotspotTarget(event.target)) return
-    stopInertia()
-    const viewport = viewportRef.current
-    if (!viewport) return
-    viewport.setPointerCapture(event.pointerId)
-    dragRef.current = {
-      active: true,
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      originX: panRef.current.x,
-      originY: panRef.current.y,
-      moved: false,
-      lastX: event.clientX,
-      lastY: event.clientY,
-      lastT: performance.now(),
-      vx: 0,
-      vy: 0,
-    }
-    setDragging(true)
-  }
-
-  const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+  const onPointerMove = useCallback((event: PointerEvent | globalThis.PointerEvent) => {
     if (!dragRef.current.active || dragRef.current.pointerId !== event.pointerId) return
     const dx = (event.clientX - dragRef.current.startX) * SENSITIVITY
     const dy = (event.clientY - dragRef.current.startY) * SENSITIVITY
@@ -248,12 +239,15 @@ export default function WalkthroughScreen({
     dragRef.current.lastT = now
     clampPan()
     applyTransform()
-  }
+  }, [applyTransform, clampPan])
 
-  const endDrag = (event: PointerEvent<HTMLDivElement>) => {
+  const endDrag = useCallback((event: PointerEvent | globalThis.PointerEvent) => {
     if (!dragRef.current.active || dragRef.current.pointerId !== event.pointerId) return
     dragRef.current.active = false
     setDragging(false)
+    window.removeEventListener('pointermove', onPointerMove)
+    window.removeEventListener('pointerup', endDrag)
+    window.removeEventListener('pointercancel', endDrag)
     if (
       dragRef.current.moved &&
       (Math.abs(dragRef.current.vx) > INERTIA_MIN ||
@@ -261,7 +255,48 @@ export default function WalkthroughScreen({
     ) {
       startInertia()
     }
+  }, [onPointerMove, startInertia])
+
+  const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return
+    if (isHotspotTarget(event.target)) return
+    stopInertia()
+    const viewport = viewportRef.current
+    if (!viewport) return
+    if (event.pointerType === 'mouse') {
+      try {
+        viewport.setPointerCapture(event.pointerId)
+      } catch {
+        // iOS / unsupported capture
+      }
+    }
+    dragRef.current = {
+      active: true,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: panRef.current.x,
+      originY: panRef.current.y,
+      moved: false,
+      lastX: event.clientX,
+      lastY: event.clientY,
+      lastT: performance.now(),
+      vx: 0,
+      vy: 0,
+    }
+    setDragging(true)
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', endDrag)
+    window.addEventListener('pointercancel', endDrag)
   }
+
+  useEffect(() => {
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', endDrag)
+      window.removeEventListener('pointercancel', endDrag)
+    }
+  }, [endDrag, onPointerMove])
 
   useEffect(() => {
     const viewport = viewportRef.current
@@ -269,6 +304,7 @@ export default function WalkthroughScreen({
 
     const onWheel = (event: WheelEvent) => {
       event.preventDefault()
+      if (viewport.clientWidth < 8 || viewport.clientHeight < 8) return
       const oldZoom = panRef.current.zoom
       const nextZoom = clamp(
         oldZoom * (event.deltaY > 0 ? 0.96 : 1.04),
@@ -278,6 +314,7 @@ export default function WalkthroughScreen({
       if (nextZoom === oldZoom) return
       const oldScale = coverRef.current * oldZoom
       const newScale = coverRef.current * nextZoom
+      if (oldScale <= 0) return
       const centerX = viewport.clientWidth / 2
       const centerY = viewport.clientHeight / 2
       const imageX = (centerX - panRef.current.x) / oldScale
@@ -310,20 +347,17 @@ export default function WalkthroughScreen({
         ref={viewportRef}
         className={`panorama-viewport ${dragging ? 'is-dragging' : ''}`}
         onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
       >
         <div
           ref={canvasRef}
           className={`panorama-canvas ${fading ? 'is-fading' : ''}`}
-          style={{ width: imgW, height: imgH }}
         >
           <img
             className="panorama-image"
             src={ROOM_ASSETS[visibleRoom].src}
             alt={ROOM_ASSETS[visibleRoom].label}
             draggable={false}
+            decoding="async"
             onDragStart={(event) => event.preventDefault()}
           />
           <div className={`walkthrough-points ${fading ? 'is-hidden' : ''}`}>
@@ -344,7 +378,11 @@ export default function WalkthroughScreen({
                 >
                   <span
                     className="room-pointer-thumb"
-                    style={{ backgroundImage: `url(${ROOM_ASSETS[destination].src})` }}
+                    style={
+                      PHOTO_THUMBS
+                        ? { backgroundImage: `url(${ROOM_ASSETS[destination].src})` }
+                        : undefined
+                    }
                   />
                   <span className="room-pointer-label">
                     {ROOM_ASSETS[destination].label}

@@ -7,7 +7,9 @@ type LandscapeGuardProps = {
 }
 
 function isPortraitViewport() {
-  return window.innerHeight > window.innerWidth
+  const width = window.visualViewport?.width ?? window.innerWidth
+  const height = window.visualViewport?.height ?? window.innerHeight
+  return height > width
 }
 
 export default function LandscapeGuard({
@@ -26,12 +28,14 @@ export default function LandscapeGuard({
     update()
     window.addEventListener('resize', update)
     window.addEventListener('orientationchange', update)
+    window.visualViewport?.addEventListener('resize', update)
     const media = window.matchMedia('(orientation: portrait)')
     media.addEventListener('change', update)
 
     return () => {
       window.removeEventListener('resize', update)
       window.removeEventListener('orientationchange', update)
+      window.visualViewport?.removeEventListener('resize', update)
       media.removeEventListener('change', update)
     }
   }, [onPortraitChange])
