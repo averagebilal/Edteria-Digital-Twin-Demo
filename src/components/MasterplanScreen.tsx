@@ -1,8 +1,6 @@
-import { ASSETS, HIGHLIGHT_COLOR, HOVER_OPACITY, MASTERPLAN_DEFAULT_OPACITY, SCENE_CONFIG } from '../assets'
+import { ASSETS, HIGHLIGHT_COLOR, SCENE_CONFIG } from '../assets'
 import interactionMap from '../data/esteriaInteractionMap.json'
-import { isTouchUI } from '../mobileViewport'
 import Stage from './Stage'
-import type { MouseEvent } from 'react'
 
 type MasterplanScreenProps = {
   hovered: boolean
@@ -15,24 +13,8 @@ export default function MasterplanScreen({
   onHoverChange,
   onSelectBuilding,
 }: MasterplanScreenProps) {
-  const touchUI = isTouchUI()
-
-  const handleBuildingClick = (event: MouseEvent) => {
-    event.stopPropagation()
-    if (touchUI && !hovered) {
-      onHoverChange(true)
-      return
-    }
-    onSelectBuilding()
-  }
-
   return (
-    <div
-      className="scene"
-      onClick={() => {
-        if (touchUI && hovered) onHoverChange(false)
-      }}
-    >
+    <div className="scene">
       <Stage focalX={SCENE_CONFIG.masterplan.focalX} focalY={SCENE_CONFIG.masterplan.focalY}>
         <img
           className="scene-image"
@@ -46,23 +28,22 @@ export default function MasterplanScreen({
           preserveAspectRatio="xMidYMid meet"
         >
           <path
-            className="hit-path"
+            className={`hit-path masterplan-building-hit ${hovered ? 'is-hovered' : ''}`}
             d={interactionMap.masterplan.building.path}
             fill={HIGHLIGHT_COLOR}
             stroke={HIGHLIGHT_COLOR}
             strokeWidth={4}
             vectorEffect="non-scaling-stroke"
-            style={{
-              fillOpacity: hovered ? HOVER_OPACITY : MASTERPLAN_DEFAULT_OPACITY,
-              strokeOpacity: hovered ? 1 : 0,
+            onPointerEnter={(event) => {
+              if (event.pointerType === 'mouse') onHoverChange(true)
             }}
-            onMouseEnter={() => {
-              if (!touchUI) onHoverChange(true)
+            onPointerLeave={(event) => {
+              if (event.pointerType === 'mouse') onHoverChange(false)
             }}
-            onMouseLeave={() => {
-              if (!touchUI) onHoverChange(false)
+            onClick={(event) => {
+              event.stopPropagation()
+              onSelectBuilding()
             }}
-            onClick={handleBuildingClick}
           />
         </svg>
         <div

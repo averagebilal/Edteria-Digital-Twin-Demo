@@ -172,6 +172,51 @@ img {
   transition: fill-opacity 240ms ease, stroke-opacity 240ms ease;
 }
 
+.floor-switch-path {
+  transition: fill-opacity 180ms ease, stroke-opacity 180ms ease;
+}
+
+.apartment-layer {
+  opacity: 1;
+  transition: opacity 180ms ease;
+}
+
+.apartment-layer.is-exiting {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.apartment-layer.is-entering {
+  animation: apartment-in 180ms ease;
+}
+
+.masterplan-building-hit {
+  fill-opacity: 0.18;
+  stroke-opacity: 0;
+  transition: none;
+  animation: esteria-pulse 2.1s ease-in-out infinite;
+}
+
+.masterplan-building-hit.is-hovered {
+  animation: none;
+  fill-opacity: 0.74;
+  stroke-opacity: 1;
+  transition: fill-opacity 180ms ease, stroke-opacity 180ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .masterplan-building-hit {
+    animation: none;
+    fill-opacity: 0.18;
+  }
+
+  .apartment-layer,
+  .apartment-layer.is-entering {
+    animation: none;
+    transition: none;
+  }
+}
+
 .brand-logo {
   position: absolute;
   top: max(14px, env(safe-area-inset-top));
@@ -473,8 +518,70 @@ img {
   transition: opacity 220ms ease;
 }
 
-.walkthrough-points.is-hidden {
+.walkthrough-points.is-hidden,
+.pano-hotspots.is-hidden {
   opacity: 0;
+  pointer-events: none;
+}
+
+.pano-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  background: var(--bg);
+}
+
+.pano-viewport.is-dragging {
+  cursor: grabbing;
+}
+
+.pano-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+.pano-hotspots {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.pano-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: #09090b;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 400ms ease;
+}
+
+.pano-veil.is-on {
+  opacity: 1;
+}
+
+.pano-loading {
+  position: absolute;
+  left: 50%;
+  top: max(18px, env(safe-area-inset-top));
+  z-index: 6;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(12, 13, 15, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(12px);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
   pointer-events: none;
 }
 
@@ -569,23 +676,23 @@ img {
 
 .room-pointer {
   position: absolute;
-  transform: translate(-50%, -50%) scale(calc(1 / var(--scene-scale, 1)));
+  transform: translate(-50%, -50%);
   transform-origin: center center;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
   pointer-events: auto;
-  touch-action: manipulation;
+  touch-action: none;
   cursor: pointer;
   z-index: 2;
   min-width: 84px;
   padding: 8px;
-  transition: transform 200ms ease;
+  transition: transform 200ms ease, opacity 160ms ease;
 }
 
 .room-pointer:hover {
-  transform: translate(-50%, -50%) scale(calc(1.08 / var(--scene-scale, 1)));
+  transform: translate(-50%, -50%) scale(1.08);
 }
 
 .room-pointer-thumb {
@@ -596,8 +703,9 @@ img {
   border-radius: 50%;
   border: 3px solid rgba(255, 255, 255, 0.95);
   background-color: rgba(12, 13, 15, 0.78);
-  background-size: cover;
-  background-position: center;
+  background-size: 145%;
+  background-position: center 8%;
+  background-repeat: no-repeat;
   box-shadow:
     0 10px 24px rgba(0, 0, 0, 0.38),
     inset 0 -6px 12px rgba(0, 0, 0, 0.2);
@@ -645,15 +753,36 @@ img {
   gap: 10px;
 }
 
-.reset-view {
+.reset-view,
+.exit-walkthrough {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 48px;
   padding: 12px 18px;
   border-radius: 999px;
   background: rgba(12, 13, 15, 0.82);
   border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #fff;
   backdrop-filter: blur(12px);
   font-size: clamp(13px, 1.5vw, 15px);
   font-weight: 600;
+  box-shadow: none;
+  transition: background 180ms ease, border-color 180ms ease;
+}
+
+.reset-view:hover,
+.exit-walkthrough:hover,
+.audio-control:hover {
+  background: rgba(22, 24, 28, 0.94);
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+.reset-view:active,
+.exit-walkthrough:active,
+.audio-control:active {
+  background: rgba(28, 30, 34, 0.96);
+  border-color: rgba(255, 255, 255, 0.4);
 }
 
 .audio-control {
@@ -688,6 +817,25 @@ img {
   }
   to {
     opacity: 1;
+  }
+}
+
+@keyframes apartment-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes esteria-pulse {
+  0%,
+  100% {
+    fill-opacity: 0.1;
+  }
+  50% {
+    fill-opacity: 0.28;
   }
 }
 
@@ -765,7 +913,8 @@ img {
 
   .back-control,
   .change-floor,
-  .reset-view {
+  .reset-view,
+  .exit-walkthrough {
     min-height: 44px;
     padding: 10px 16px;
     font-size: 14px;

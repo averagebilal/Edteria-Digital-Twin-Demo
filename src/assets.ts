@@ -1,4 +1,5 @@
 import type { RoomId } from './types'
+import { ROOM_VIEW_CONFIG as WALKTHROUGH_VIEW_CONFIG } from './data/walkthrough360'
 
 export const DESIGN_WIDTH = 1920
 export const DESIGN_HEIGHT = 1080
@@ -9,16 +10,7 @@ export const SCENE_CONFIG = {
   building: { focalX: 0.5, focalY: 0.5 },
 } as const
 
-export const ROOM_VIEW_CONFIG: Record<
-  RoomId,
-  { initialX: number; initialY: number; initialZoom: number }
-> = {
-  lounge: { initialX: 0, initialY: 0, initialZoom: 1.28 },
-  kitchen: { initialX: 0, initialY: 0, initialZoom: 1.28 },
-  balcony: { initialX: 0, initialY: 0, initialZoom: 1.28 },
-  master: { initialX: 0, initialY: 0, initialZoom: 1.28 },
-  bathroom: { initialX: 0, initialY: 0, initialZoom: 1.28 },
-}
+export const ROOM_VIEW_CONFIG = WALKTHROUGH_VIEW_CONFIG
 
 export const ASSETS = {
   logo: '/assets/branding/esteria-logo.svg',
@@ -27,12 +19,32 @@ export const ASSETS = {
   audio: '/assets/audio/ambient.mp3',
 } as const
 
-export const ROOM_ASSETS: Record<RoomId, { src: string; label: string }> = {
-  lounge: { src: '/assets/walkthrough/lounge.webp', label: 'Lounge' },
-  balcony: { src: '/assets/walkthrough/balcony.webp', label: 'Balcony' },
-  kitchen: { src: '/assets/walkthrough/kitchen.webp', label: 'Kitchen' },
-  master: { src: '/assets/walkthrough/master-bedroom.webp', label: 'Master' },
-  bathroom: { src: '/assets/walkthrough/bathroom.webp', label: 'Bathroom' },
+export const ROOM_ASSETS: Record<RoomId, { src: string; label: string; icon: string }> = {
+  lounge: {
+    src: '/assets/walkthrough-360/lounge.webp',
+    label: 'Living Room',
+    icon: '/assets/walkthrough/icons/lounge.png',
+  },
+  balcony: {
+    src: '/assets/walkthrough-360/balcony.webp',
+    label: 'Balcony',
+    icon: '/assets/walkthrough/icons/balcony.png',
+  },
+  kitchen: {
+    src: '/assets/walkthrough-360/kitchen.webp',
+    label: 'Kitchen',
+    icon: '/assets/walkthrough/icons/kitchen.png',
+  },
+  master: {
+    src: '/assets/walkthrough-360/master.webp',
+    label: 'Bedroom',
+    icon: '/assets/walkthrough/icons/master.png',
+  },
+  bathroom: {
+    src: '/assets/walkthrough-360/bathroom.webp',
+    label: 'Bathroom',
+    icon: '/assets/walkthrough/icons/bathroom.png',
+  },
 }
 
 export const WALKTHROUGH_ROOMS: RoomId[] = [

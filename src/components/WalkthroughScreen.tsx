@@ -1,7 +1,23 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react'
-import { preloadImage, ROOM_ASSETS, ROOM_VIEW_CONFIG } from '../assets'
-import interactionMap from '../data/esteriaInteractionMap.json'
-import { IS_IOS } from '../mobileViewport'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react'
+import * as THREE from 'three'
+import { ROOM_ASSETS } from '../assets'
+import {
+  DEFAULT_FOV,
+  equirectToWorld,
+  MAX_FOV,
+  MAX_LATITUDE,
+  MIN_FOV,
+  MIN_LATITUDE,
+  ROOM_HOTSPOTS,
+  ROOM_VIEW_CONFIG,
+} from '../data/walkthrough360'
 import type { RoomId } from '../types'
 
 type WalkthroughScreenProps = {
@@ -11,23 +27,37 @@ type WalkthroughScreenProps = {
   audioControl?: ReactNode
 }
 
-const DRAG_THRESHOLD = 7
-const SENSITIVITY = 0.92
-const MIN_ZOOM = 1
-const MAX_ZOOM = 1.35
-const INERTIA_DECAY = 0.92
-const INERTIA_MIN = 0.18
-const PHOTO_THUMBS = !IS_IOS
+type HotspotScreen = {
+  id: string
+  x: number
+  y: number
+  visible: boolean
+}
+
+const DRAG_THRESHOLD = 6
+const LOOK_SENSITIVITY = 0.18
+const CROSSFADE_MS = 400
+const HINT_MS = 2600
+const HOTSPOT_FRONT_DOT = 0.12
 
 let dragHintShown = false
 
 function clamp(value: number, min: number, max: number) {
-  if (min > max) return (min + max) / 2
   return Math.min(max, Math.max(min, value))
 }
 
-function isHotspotTarget(target: EventTarget | null) {
-  return target instanceof Element && Boolean(target.closest('.room-pointer'))
+function isUiControl(target: EventTarget | null) {
+  return target instanceof Element && Boolean(target.closest('.walkthrough-topbar'))
+}
+
+function lookTarget(longitude: number, latitude: number) {
+  const lonRad = THREE.MathUtils.degToRad(longitude)
+  const latRad = THREE.MathUtils.degToRad(latitude)
+  return new THREE.Vector3(
+    Math.cos(latRad) * Math.sin(lonRad),
+    Math.sin(latRad),
+    Math.cos(latRad) * Math.cos(lonRad),
+  )
 }
 
 export default function WalkthroughScreen({
@@ -37,252 +67,297 @@ export default function WalkthroughScreen({
   audioControl,
 }: WalkthroughScreenProps) {
   const viewportRef = useRef<HTMLDivElement>(null)
-  const canvasRef = useRef<HTMLDivElement>(null)
-  const coverRef = useRef(1)
-  const panRef = useRef({ x: 0, y: 0, zoom: 1.28 })
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
+  const meshRef = useRef<THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial> | null>(null)
+  const loaderRef = useRef(new THREE.TextureLoader())
+  const texturesRef = useRef(new Map<string, THREE.Texture>())
+  const loadingUrlsRef = useRef(new Map<string, Promise<THREE.Texture>>())
+  const longitudeRef = useRef(ROOM_VIEW_CONFIG[currentRoom].longitude)
+  const latitudeRef = useRef(ROOM_VIEW_CONFIG[currentRoom].latitude)
+  const fovRef = useRef(ROOM_VIEW_CONFIG[currentRoom].fov)
+  const visibleRoomRef = useRef<RoomId>(currentRoom)
+  const projectVecRef = useRef(new THREE.Vector3())
+  const cameraDirRef = useRef(new THREE.Vector3())
   const dragRef = useRef({
     active: false,
     pointerId: -1,
     startX: 0,
     startY: 0,
-    originX: 0,
-    originY: 0,
+    originLon: 0,
+    originLat: 0,
     moved: false,
-    lastX: 0,
-    lastY: 0,
-    lastT: 0,
-    vx: 0,
-    vy: 0,
   })
-  const inertiaRef = useRef(0)
+  const hotspotMovedRef = useRef(false)
+
+  const [viewerReady, setViewerReady] = useState(false)
   const [visibleRoom, setVisibleRoom] = useState(currentRoom)
-  const [fading, setFading] = useState(false)
   const [dragging, setDragging] = useState(false)
+  const [fading, setFading] = useState(true)
+  const [loading, setLoading] = useState(true)
   const [showHint, setShowHint] = useState(!dragHintShown)
+  const [hotspotScreens, setHotspotScreens] = useState<HotspotScreen[]>([])
 
-  const points = interactionMap.walkthrough[visibleRoom].points
-
-  const applyTransform = useCallback(() => {
-    const canvas = canvasRef.current
-    const viewport = viewportRef.current
-    if (!canvas || !viewport) return
-    if (viewport.clientWidth < 8 || viewport.clientHeight < 8) return
-    const [width, height] = interactionMap.walkthrough[visibleRoom].referenceSize
-    const { x, y, zoom } = panRef.current
-    const cover = coverRef.current
-    canvas.style.width = `${width * cover}px`
-    canvas.style.height = `${height * cover}px`
-    canvas.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${zoom})`
-    canvas.style.setProperty('--scene-scale', String(zoom))
-  }, [visibleRoom])
-
-  const clampPan = useCallback((room: RoomId = visibleRoom) => {
-    const viewport = viewportRef.current
-    if (!viewport || viewport.clientWidth < 8 || viewport.clientHeight < 8) return
-    const [width, height] = interactionMap.walkthrough[room].referenceSize
-    const zoom = panRef.current.zoom
-    const displayedWidth = width * coverRef.current * zoom
-    const displayedHeight = height * coverRef.current * zoom
-    panRef.current.x = clamp(
-      panRef.current.x,
-      viewport.clientWidth - displayedWidth,
-      0,
-    )
-    panRef.current.y = clamp(
-      panRef.current.y,
-      viewport.clientHeight - displayedHeight,
-      0,
-    )
-  }, [visibleRoom])
+  const applyLook = useCallback(() => {
+    const camera = cameraRef.current
+    if (!camera) return
+    camera.fov = fovRef.current
+    camera.updateProjectionMatrix()
+    camera.position.set(0, 0, 0)
+    camera.lookAt(lookTarget(longitudeRef.current, latitudeRef.current))
+  }, [])
 
   const applyRoomView = useCallback(
     (room: RoomId) => {
-      const viewport = viewportRef.current
-      if (!viewport || viewport.clientWidth < 8 || viewport.clientHeight < 8) return
-      const [width, height] = interactionMap.walkthrough[room].referenceSize
       const config = ROOM_VIEW_CONFIG[room]
-      const cover = Math.max(
-        viewport.clientWidth / width,
-        viewport.clientHeight / height,
-      )
-      if (!Number.isFinite(cover) || cover <= 0) return
-      coverRef.current = cover
-      panRef.current.zoom = config.initialZoom
-      const scale = cover * config.initialZoom
-      panRef.current.x =
-        (viewport.clientWidth - width * scale) / 2 + config.initialX
-      panRef.current.y =
-        (viewport.clientHeight - height * scale) / 2 + config.initialY
-      clampPan(room)
-      applyTransform()
+      longitudeRef.current = config.longitude
+      latitudeRef.current = config.latitude
+      fovRef.current = config.fov
+      applyLook()
     },
-    [applyTransform, clampPan],
+    [applyLook],
   )
 
-  const stopInertia = useCallback(() => {
-    if (inertiaRef.current) {
-      cancelAnimationFrame(inertiaRef.current)
-      inertiaRef.current = 0
-    }
+  const projectHotspots = useCallback((room: RoomId) => {
+    const camera = cameraRef.current
+    const viewport = viewportRef.current
+    if (!camera || !viewport) return
+
+    const width = viewport.clientWidth
+    const height = viewport.clientHeight
+    if (width < 8 || height < 8) return
+
+    camera.getWorldDirection(cameraDirRef.current)
+    const next = ROOM_HOTSPOTS[room].map((hotspot) => {
+      const position = equirectToWorld(hotspot.u, hotspot.v)
+      const facing = projectVecRef.current.copy(position).normalize().dot(cameraDirRef.current)
+      const projected = position.project(camera)
+      return {
+        id: hotspot.id,
+        x: (projected.x * 0.5 + 0.5) * width,
+        y: (-projected.y * 0.5 + 0.5) * height,
+        visible: facing > HOTSPOT_FRONT_DOT && projected.z > -1 && projected.z < 1,
+      }
+    })
+
+    setHotspotScreens((prev) => {
+      if (
+        prev.length === next.length &&
+        prev.every(
+          (item, index) =>
+            item.id === next[index].id &&
+            item.visible === next[index].visible &&
+            Math.abs(item.x - next[index].x) < 0.6 &&
+            Math.abs(item.y - next[index].y) < 0.6,
+        )
+      ) {
+        return prev
+      }
+      return next
+    })
   }, [])
 
-  useLayoutEffect(() => {
-    applyRoomView(visibleRoom)
-  }, [applyRoomView, visibleRoom])
+  const loadTexture = useCallback((url: string) => {
+    const cached = texturesRef.current.get(url)
+    if (cached) return Promise.resolve(cached)
+
+    const pending = loadingUrlsRef.current.get(url)
+    if (pending) return pending
+
+    const promise = new Promise<THREE.Texture>((resolve, reject) => {
+      loaderRef.current.load(
+        url,
+        (texture) => {
+          texture.colorSpace = THREE.SRGBColorSpace
+          texture.minFilter = THREE.LinearFilter
+          texture.magFilter = THREE.LinearFilter
+          texturesRef.current.set(url, texture)
+          loadingUrlsRef.current.delete(url)
+          resolve(texture)
+        },
+        undefined,
+        () => {
+          loadingUrlsRef.current.delete(url)
+          reject(new Error(`Failed to load panorama ${url}`))
+        },
+      )
+    })
+    loadingUrlsRef.current.set(url, promise)
+    return promise
+  }, [])
+
+  const assignTexture = useCallback((texture: THREE.Texture) => {
+    const mesh = meshRef.current
+    if (!mesh) return
+    mesh.material.map = texture
+    mesh.material.needsUpdate = true
+  }, [])
+
+  const resizeRenderer = useCallback(() => {
+    const viewport = viewportRef.current
+    const renderer = rendererRef.current
+    const camera = cameraRef.current
+    if (!viewport || !renderer || !camera) return
+    const width = viewport.clientWidth || window.innerWidth
+    const height = viewport.clientHeight || window.innerHeight
+    if (width < 8 || height < 8) return
+    camera.aspect = width / height
+    camera.updateProjectionMatrix()
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
+    renderer.setSize(width, height, false)
+  }, [])
 
   useEffect(() => {
     const viewport = viewportRef.current
     if (!viewport) return
 
-    const onResize = () => {
-      if (viewport.clientWidth < 8 || viewport.clientHeight < 8) return
-      const [width, height] = interactionMap.walkthrough[visibleRoom].referenceSize
-      const nextCover = Math.max(
-        viewport.clientWidth / width,
-        viewport.clientHeight / height,
-      )
-      if (!Number.isFinite(nextCover) || nextCover <= 0) return
-      const oldScale = coverRef.current * panRef.current.zoom
-      if (!Number.isFinite(oldScale) || oldScale <= 0) {
-        coverRef.current = nextCover
-        applyRoomView(visibleRoom)
-        return
-      }
-      coverRef.current = nextCover
-      const newScale = nextCover * panRef.current.zoom
-      const centerX = viewport.clientWidth / 2
-      const centerY = viewport.clientHeight / 2
-      const imageX = (centerX - panRef.current.x) / oldScale
-      const imageY = (centerY - panRef.current.y) / oldScale
-      panRef.current.x = centerX - imageX * newScale
-      panRef.current.y = centerY - imageY * newScale
-      clampPan()
-      applyTransform()
-    }
+    const scene = new THREE.Scene()
+    scene.background = new THREE.Color(0x09090b)
+    const camera = new THREE.PerspectiveCamera(DEFAULT_FOV, 1, 0.1, 200)
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: false,
+      powerPreference: 'high-performance',
+    })
+    renderer.outputColorSpace = THREE.SRGBColorSpace
+    renderer.setClearColor(0x09090b, 1)
+    renderer.domElement.className = 'pano-canvas'
+    viewport.insertBefore(renderer.domElement, viewport.firstChild)
 
-    const observer = new ResizeObserver(onResize)
-    observer.observe(viewport)
-    window.addEventListener('orientationchange', onResize)
-    window.visualViewport?.addEventListener('resize', onResize)
-    return () => {
-      observer.disconnect()
-      window.removeEventListener('orientationchange', onResize)
-      window.visualViewport?.removeEventListener('resize', onResize)
+    const geometry = new THREE.SphereGeometry(100, 64, 40)
+    geometry.scale(-1, 1, 1)
+    const material = new THREE.MeshBasicMaterial()
+    const mesh = new THREE.Mesh(geometry, material)
+    scene.add(mesh)
+
+    cameraRef.current = camera
+    rendererRef.current = renderer
+    meshRef.current = mesh
+    setViewerReady(true)
+
+    resizeRenderer()
+    applyLook()
+
+    let frame = 0
+    const tick = () => {
+      frame = window.requestAnimationFrame(tick)
+      applyLook()
+      renderer.render(scene, camera)
+      projectHotspots(visibleRoomRef.current)
     }
-  }, [applyRoomView, applyTransform, clampPan, visibleRoom])
+    frame = window.requestAnimationFrame(tick)
+
+    const observer = new ResizeObserver(resizeRenderer)
+    observer.observe(viewport)
+    window.addEventListener('orientationchange', resizeRenderer)
+    window.visualViewport?.addEventListener('resize', resizeRenderer)
+
+    return () => {
+      setViewerReady(false)
+      window.cancelAnimationFrame(frame)
+      observer.disconnect()
+      window.removeEventListener('orientationchange', resizeRenderer)
+      window.visualViewport?.removeEventListener('resize', resizeRenderer)
+      geometry.dispose()
+      material.dispose()
+      for (const texture of texturesRef.current.values()) texture.dispose()
+      texturesRef.current.clear()
+      loadingUrlsRef.current.clear()
+      renderer.dispose()
+      renderer.domElement.remove()
+      cameraRef.current = null
+      rendererRef.current = null
+      meshRef.current = null
+    }
+  }, [applyLook, projectHotspots, resizeRenderer])
 
   useEffect(() => {
-    if (currentRoom === visibleRoom) return
+    visibleRoomRef.current = visibleRoom
+  }, [visibleRoom])
+
+  useEffect(() => {
+    if (!viewerReady) return
     let cancelled = false
-    void preloadImage(ROOM_ASSETS[currentRoom].src).then(() => {
-      if (cancelled) return
-      setFading(true)
-      window.setTimeout(() => {
+    const destination = currentRoom
+    const url = ROOM_ASSETS[destination].src
+    const hadTexture = Boolean(meshRef.current?.material.map)
+    setLoading(true)
+
+    void loadTexture(url)
+      .then(async (texture) => {
         if (cancelled) return
-        setVisibleRoom(currentRoom)
-        requestAnimationFrame(() => setFading(false))
-      }, 280)
-    })
+        if (hadTexture) {
+          setFading(true)
+          await new Promise((resolve) => window.setTimeout(resolve, CROSSFADE_MS / 2))
+          if (cancelled) return
+        }
+        assignTexture(texture)
+        setVisibleRoom(destination)
+        visibleRoomRef.current = destination
+        applyRoomView(destination)
+        requestAnimationFrame(() => {
+          if (cancelled) return
+          setFading(false)
+          setLoading(false)
+        })
+      })
+      .catch(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    for (const hotspot of ROOM_HOTSPOTS[destination]) {
+      void loadTexture(ROOM_ASSETS[hotspot.targetRoom].src)
+    }
+
     return () => {
       cancelled = true
     }
-  }, [currentRoom, visibleRoom])
+  }, [applyRoomView, assignTexture, currentRoom, loadTexture, viewerReady])
 
   useEffect(() => {
     if (!showHint) return
     dragHintShown = true
-    const timer = window.setTimeout(() => setShowHint(false), 2600)
+    const timer = window.setTimeout(() => setShowHint(false), HINT_MS)
     return () => window.clearTimeout(timer)
   }, [showHint])
 
-  const startInertia = useCallback(() => {
-    stopInertia()
-    const step = () => {
-      panRef.current.x += dragRef.current.vx
-      panRef.current.y += dragRef.current.vy
-      dragRef.current.vx *= INERTIA_DECAY
-      dragRef.current.vy *= INERTIA_DECAY
-      clampPan()
-      applyTransform()
-      if (
-        Math.abs(dragRef.current.vx) > INERTIA_MIN ||
-        Math.abs(dragRef.current.vy) > INERTIA_MIN
-      ) {
-        inertiaRef.current = requestAnimationFrame(step)
-      } else {
-        inertiaRef.current = 0
-      }
-    }
-    inertiaRef.current = requestAnimationFrame(step)
-  }, [applyTransform, clampPan, stopInertia])
-
-  const onPointerMove = useCallback((event: PointerEvent | globalThis.PointerEvent) => {
+  const onPointerMove = useCallback((event: PointerEvent | ReactPointerEvent) => {
     if (!dragRef.current.active || dragRef.current.pointerId !== event.pointerId) return
-    const dx = (event.clientX - dragRef.current.startX) * SENSITIVITY
-    const dy = (event.clientY - dragRef.current.startY) * SENSITIVITY
-    if (
-      Math.hypot(
-        event.clientX - dragRef.current.startX,
-        event.clientY - dragRef.current.startY,
-      ) > DRAG_THRESHOLD
-    ) {
+    const dx = event.clientX - dragRef.current.startX
+    const dy = event.clientY - dragRef.current.startY
+    if (Math.hypot(dx, dy) > DRAG_THRESHOLD) {
       dragRef.current.moved = true
+      hotspotMovedRef.current = true
     }
-    panRef.current.x = dragRef.current.originX + dx
-    panRef.current.y = dragRef.current.originY + dy
-    const now = performance.now()
-    const dt = Math.max(now - dragRef.current.lastT, 1)
-    dragRef.current.vx = ((event.clientX - dragRef.current.lastX) * SENSITIVITY) / dt * 16
-    dragRef.current.vy = ((event.clientY - dragRef.current.lastY) * SENSITIVITY) / dt * 16
-    dragRef.current.lastX = event.clientX
-    dragRef.current.lastY = event.clientY
-    dragRef.current.lastT = now
-    clampPan()
-    applyTransform()
-  }, [applyTransform, clampPan])
+    longitudeRef.current = dragRef.current.originLon - dx * LOOK_SENSITIVITY
+    latitudeRef.current = clamp(
+      dragRef.current.originLat + dy * LOOK_SENSITIVITY,
+      MIN_LATITUDE,
+      MAX_LATITUDE,
+    )
+  }, [])
 
-  const endDrag = useCallback((event: PointerEvent | globalThis.PointerEvent) => {
+  const endDrag = useCallback((event: PointerEvent | ReactPointerEvent) => {
     if (!dragRef.current.active || dragRef.current.pointerId !== event.pointerId) return
     dragRef.current.active = false
     setDragging(false)
     window.removeEventListener('pointermove', onPointerMove)
     window.removeEventListener('pointerup', endDrag)
     window.removeEventListener('pointercancel', endDrag)
-    if (
-      dragRef.current.moved &&
-      (Math.abs(dragRef.current.vx) > INERTIA_MIN ||
-        Math.abs(dragRef.current.vy) > INERTIA_MIN)
-    ) {
-      startInertia()
-    }
-  }, [onPointerMove, startInertia])
+  }, [onPointerMove])
 
-  const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return
-    if (isHotspotTarget(event.target)) return
-    stopInertia()
-    const viewport = viewportRef.current
-    if (!viewport) return
-    if (event.pointerType === 'mouse') {
-      try {
-        viewport.setPointerCapture(event.pointerId)
-      } catch {
-        // iOS / unsupported capture
-      }
-    }
+    if (isUiControl(event.target)) return
+    hotspotMovedRef.current = false
     dragRef.current = {
       active: true,
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      originX: panRef.current.x,
-      originY: panRef.current.y,
+      originLon: longitudeRef.current,
+      originLat: latitudeRef.current,
       moved: false,
-      lastX: event.clientX,
-      lastY: event.clientY,
-      lastT: performance.now(),
-      vx: 0,
-      vy: 0,
     }
     setDragging(true)
     window.addEventListener('pointermove', onPointerMove)
@@ -304,94 +379,69 @@ export default function WalkthroughScreen({
 
     const onWheel = (event: WheelEvent) => {
       event.preventDefault()
-      if (viewport.clientWidth < 8 || viewport.clientHeight < 8) return
-      const oldZoom = panRef.current.zoom
-      const nextZoom = clamp(
-        oldZoom * (event.deltaY > 0 ? 0.96 : 1.04),
-        MIN_ZOOM,
-        MAX_ZOOM,
-      )
-      if (nextZoom === oldZoom) return
-      const oldScale = coverRef.current * oldZoom
-      const newScale = coverRef.current * nextZoom
-      if (oldScale <= 0) return
-      const centerX = viewport.clientWidth / 2
-      const centerY = viewport.clientHeight / 2
-      const imageX = (centerX - panRef.current.x) / oldScale
-      const imageY = (centerY - panRef.current.y) / oldScale
-      panRef.current.zoom = nextZoom
-      panRef.current.x = centerX - imageX * newScale
-      panRef.current.y = centerY - imageY * newScale
-      clampPan()
-      applyTransform()
+      const direction = event.deltaY > 0 ? 1 : -1
+      fovRef.current = clamp(fovRef.current + direction * 2.2, MIN_FOV, MAX_FOV)
     }
 
     viewport.addEventListener('wheel', onWheel, { passive: false })
     return () => viewport.removeEventListener('wheel', onWheel)
-  }, [applyTransform, clampPan])
+  }, [])
 
   const resetView = () => {
-    stopInertia()
     applyRoomView(visibleRoom)
   }
 
   const handleHotspotClick = (destination: RoomId) => {
-    if (fading) return
-    stopInertia()
+    if (fading || hotspotMovedRef.current || dragRef.current.moved) return
     onNavigate(destination)
   }
+
+  const hotspots = ROOM_HOTSPOTS[visibleRoom]
 
   return (
     <div className="scene walkthrough">
       <div
         ref={viewportRef}
-        className={`panorama-viewport ${dragging ? 'is-dragging' : ''}`}
+        className={`pano-viewport ${dragging ? 'is-dragging' : ''}`}
         onPointerDown={onPointerDown}
+        onContextMenu={(event) => event.preventDefault()}
       >
-        <div
-          ref={canvasRef}
-          className={`panorama-canvas ${fading ? 'is-fading' : ''}`}
-        >
-          <img
-            className="panorama-image"
-            src={ROOM_ASSETS[visibleRoom].src}
-            alt={ROOM_ASSETS[visibleRoom].label}
-            draggable={false}
-            decoding="async"
-            onDragStart={(event) => event.preventDefault()}
-          />
-          <div className={`walkthrough-points ${fading ? 'is-hidden' : ''}`}>
-            {points.map((point) => {
-              const destination = point.to as RoomId
-              return (
-                <button
-                  key={`${visibleRoom}-${destination}`}
-                  type="button"
-                  className="room-pointer"
-                  style={{ left: `${point.xPercent}%`, top: `${point.yPercent}%` }}
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    handleHotspotClick(destination)
-                  }}
-                  disabled={fading}
-                >
-                  <span
-                    className="room-pointer-thumb"
-                    style={
-                      PHOTO_THUMBS
-                        ? { backgroundImage: `url(${ROOM_ASSETS[destination].src})` }
-                        : undefined
-                    }
-                  />
-                  <span className="room-pointer-label">
-                    {ROOM_ASSETS[destination].label}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
+        <div className={`pano-hotspots ${fading ? 'is-hidden' : ''}`}>
+          {hotspots.map((hotspot) => {
+            const screen = hotspotScreens.find((item) => item.id === hotspot.id)
+            const destination = hotspot.targetRoom
+            const visible = Boolean(screen?.visible) && !fading
+            return (
+              <button
+                key={hotspot.id}
+                type="button"
+                className="room-pointer"
+                style={{
+                  left: `${screen?.x ?? 0}px`,
+                  top: `${screen?.y ?? 0}px`,
+                  opacity: visible ? 1 : 0,
+                  pointerEvents: visible ? 'auto' : 'none',
+                }}
+                tabIndex={visible ? 0 : -1}
+                aria-hidden={!visible}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  handleHotspotClick(destination)
+                }}
+                disabled={fading || loading}
+              >
+                <span
+                  className="room-pointer-thumb"
+                  style={{ backgroundImage: `url(${ROOM_ASSETS[destination].icon})` }}
+                />
+                <span className="room-pointer-label">
+                  {hotspot.label}
+                </span>
+              </button>
+            )
+          })}
         </div>
+        <div className={`pano-veil ${fading ? 'is-on' : ''}`} />
       </div>
 
       {showHint && (
@@ -401,8 +451,14 @@ export default function WalkthroughScreen({
         </div>
       )}
 
+      {loading && (
+        <div className="pano-loading" aria-live="polite">
+          Loading
+        </div>
+      )}
+
       <div className="walkthrough-topbar">
-        <button type="button" className="back-control" onClick={onExit}>
+        <button type="button" className="exit-walkthrough" onClick={onExit}>
           ← Exit Walkthrough
         </button>
         <div className="walkthrough-topbar-right">
