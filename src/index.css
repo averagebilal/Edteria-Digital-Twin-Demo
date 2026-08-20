@@ -306,26 +306,61 @@ img {
 }
 
 .opening-cta {
-  display: block;
+  position: relative;
+  display: grid;
+  place-items: center;
   padding: 0;
   border: none;
   background: transparent;
   border-radius: 9px;
   line-height: 0;
-  transition: transform 200ms ease, filter 200ms ease;
 }
 
-.opening-cta img {
+.opening-cta-idle,
+.opening-cta-hover {
+  grid-area: 1 / 1;
   width: min(268px, 46vw);
   max-width: min(268px, 52dvh);
+  transition: opacity 200ms ease;
+}
+
+.opening-cta-idle {
   height: auto;
   display: block;
+  opacity: 1;
+}
+
+.opening-cta-hover {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-sizing: border-box;
+  aspect-ratio: 268 / 68;
+  padding: 0 28px;
+  border-radius: 9px;
+  background: var(--gold-cta);
+  border: 2px solid var(--gold-cta);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.opening-cta-hover svg {
+  width: 14px;
+  height: 14px;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .opening-cta:hover {
-    transform: scale(1.04);
-    filter: brightness(1.12) drop-shadow(0 0 14px rgba(246, 234, 140, 0.38));
+  .opening-cta:hover .opening-cta-idle {
+    opacity: 0;
+  }
+
+  .opening-cta:hover .opening-cta-hover {
+    opacity: 1;
   }
 }
 
@@ -915,7 +950,8 @@ img {
     width: min(280px, 42vw);
   }
 
-  .opening-cta img {
+  .opening-cta-idle,
+  .opening-cta-hover {
     width: min(220px, 44vw);
   }
 

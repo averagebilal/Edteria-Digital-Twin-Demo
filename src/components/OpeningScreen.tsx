@@ -32,10 +32,17 @@ export default function OpeningScreen({
         />
         <button type="button" className="opening-cta" onClick={onStart}>
           <img
+            className="opening-cta-idle"
             src={ASSETS.startButton}
             alt="Start Experience"
             draggable={false}
           />
+          <span className="opening-cta-hover" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M8.4 5.8v12.4L19 12 8.4 5.8Z" fill="currentColor" />
+            </svg>
+            Start Experience
+          </span>
         </button>
       </div>
     </div>
