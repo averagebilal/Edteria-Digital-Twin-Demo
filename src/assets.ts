@@ -13,7 +13,8 @@ export const SCENE_CONFIG = {
 export const ROOM_VIEW_CONFIG = WALKTHROUGH_VIEW_CONFIG
 
 export const ASSETS = {
-  logo: '/assets/branding/esteria-logo.svg',
+  logo: '/assets/branding/LOGO.svg',
+  startButton: '/assets/geometry/start-experience.svg',
   masterplan: '/assets/masterplan/masterplan.webp',
   building: '/assets/building/building-front.webp',
   audio: '/assets/audio/ambient.mp3',
@@ -31,7 +32,7 @@ export const ROOM_ASSETS: Record<RoomId, { src: string; label: string; icon: str
     icon: '/assets/walkthrough/icons/balcony.png',
   },
   kitchen: {
-    src: '/assets/walkthrough-360/kitchen.png',
+    src: '/assets/walkthrough-360/kitchen.webp',
     label: 'Kitchen',
     icon: '/assets/walkthrough/icons/kitchen.png',
   },

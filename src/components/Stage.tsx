@@ -43,7 +43,19 @@ export default function Stage({
     update()
     const observer = new ResizeObserver(update)
     observer.observe(viewport)
-    return () => observer.disconnect()
+    window.addEventListener('resize', update)
+    window.addEventListener('orientationchange', update)
+    window.addEventListener('fullscreenchange', update)
+    window.addEventListener('webkitfullscreenchange', update)
+    window.visualViewport?.addEventListener('resize', update)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', update)
+      window.removeEventListener('orientationchange', update)
+      window.removeEventListener('fullscreenchange', update)
+      window.removeEventListener('webkitfullscreenchange', update)
+      window.visualViewport?.removeEventListener('resize', update)
+    }
   }, [width, height, focalX, focalY])
 
   return (

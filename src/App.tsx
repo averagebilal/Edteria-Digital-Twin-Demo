@@ -8,8 +8,9 @@ import OpeningScreen from './components/OpeningScreen'
 import WalkthroughScreen from './components/WalkthroughScreen'
 import {
   applyVisualViewportToRoot,
-  expandMobileChrome,
+  attemptImmersiveMode,
   IS_IOS,
+  nudgeBrowserChrome,
   subscribeVisualViewport,
 } from './mobileViewport'
 import type { BuildingMode, FloorId, RoomId, Screen } from './types'
@@ -65,27 +66,35 @@ export default function App() {
   }, [])
 
   const handleStart = useCallback(() => {
-    expandMobileChrome()
+    const immersive = attemptImmersiveMode()
     void playAudio()
     void preloadImage(ASSETS.building)
     setOpeningFade(true)
     window.setTimeout(() => setScreen('masterplan'), 420)
+    void immersive.then((entered) => {
+      if (!entered) nudgeBrowserChrome()
+    })
   }, [playAudio])
 
-  const handleSelectBuilding = useCallback(() => {
+  const resetBuildingState = useCallback(() => {
     setBuildingMode('floor-selection')
     setHoveredFloor(null)
     setSelectedFloor(null)
     setHoveredApartment(null)
     setSelectedApartment(null)
     setApartmentModalOpen(false)
+    setHoveredBuilding(false)
+  }, [])
+
+  const handleSelectBuilding = useCallback(() => {
+    resetBuildingState()
     setScreen('building')
     if (IS_IOS) {
       void preloadImage(ROOM_ASSETS.lounge.src)
     } else {
       void preloadImages(WALKTHROUGH_ROOMS.map((room) => ROOM_ASSETS[room].src))
     }
-  }, [])
+  }, [resetBuildingState])
 
   const handleSelectFloor = useCallback((floor: FloorId) => {
     setSelectedFloor(floor)
@@ -96,21 +105,12 @@ export default function App() {
     setBuildingMode('apartment-selection')
   }, [])
 
-  const handleChangeFloor = useCallback(() => {
-    setBuildingMode('floor-selection')
-    setHoveredFloor(null)
-    setHoveredApartment(null)
-    setSelectedApartment(null)
-    setApartmentModalOpen(false)
-  }, [])
-
   const handleSelectApartment = useCallback((id: string) => {
     setSelectedApartment(id)
     setApartmentModalOpen(true)
   }, [])
 
   const handleStartWalkthrough = useCallback(() => {
-    expandMobileChrome()
     setCurrentRoom('lounge')
     void preloadImage(ROOM_ASSETS.lounge.src).finally(() => {
       setScreen('walkthrough')
@@ -120,6 +120,11 @@ export default function App() {
   const handleExitWalkthrough = useCallback(() => {
     setScreen('building')
   }, [])
+
+  const handleReturnToMasterplan = useCallback(() => {
+    resetBuildingState()
+    setScreen('masterplan')
+  }, [resetBuildingState])
 
   const handleToggleAudio = useCallback(() => {
     const audio = audioRef.current
@@ -160,6 +165,7 @@ export default function App() {
             hovered={hoveredBuilding}
             onHoverChange={setHoveredBuilding}
             onSelectBuilding={handleSelectBuilding}
+            onReturnToMasterplan={handleReturnToMasterplan}
           />
         )}
 
@@ -175,9 +181,9 @@ export default function App() {
             onSelectFloor={handleSelectFloor}
             onHoverApartment={setHoveredApartment}
             onSelectApartment={handleSelectApartment}
-            onChangeFloor={handleChangeFloor}
             onCloseModal={() => setApartmentModalOpen(false)}
             onStartWalkthrough={handleStartWalkthrough}
+            onReturnToMasterplan={handleReturnToMasterplan}
           />
         )}
 
@@ -186,6 +192,7 @@ export default function App() {
             currentRoom={currentRoom}
             onNavigate={setCurrentRoom}
             onExit={handleExitWalkthrough}
+            onReturnToMasterplan={handleReturnToMasterplan}
             audioControl={
               <AudioControl
                 enabled={audioEnabled && !portrait}

@@ -1,17 +1,20 @@
 import { ASSETS, HIGHLIGHT_COLOR, SCENE_CONFIG } from '../assets'
 import interactionMap from '../data/esteriaInteractionMap.json'
+import BrandLogo from './BrandLogo'
 import Stage from './Stage'
 
 type MasterplanScreenProps = {
   hovered: boolean
   onHoverChange: (hovered: boolean) => void
   onSelectBuilding: () => void
+  onReturnToMasterplan: () => void
 }
 
 export default function MasterplanScreen({
   hovered,
   onHoverChange,
   onSelectBuilding,
+  onReturnToMasterplan,
 }: MasterplanScreenProps) {
   return (
     <div className="scene">
@@ -56,7 +59,7 @@ export default function MasterplanScreen({
           </div>
         </div>
       </Stage>
-      <img className="brand-logo" src={ASSETS.logo} alt="ESTERIA" draggable={false} />
+      <BrandLogo onReturnToMasterplan={onReturnToMasterplan} />
     </div>
   )
 }

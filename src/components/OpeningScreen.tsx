@@ -31,10 +31,11 @@ export default function OpeningScreen({
           draggable={false}
         />
         <button type="button" className="opening-cta" onClick={onStart}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M8.4 5.8v12.4L19 12 8.4 5.8Z" fill="currentColor" />
-          </svg>
-          Start Experience
+          <img
+            src={ASSETS.startButton}
+            alt="Start Experience"
+            draggable={false}
+          />
         </button>
       </div>
     </div>

@@ -8,6 +8,7 @@ import {
 } from 'react'
 import * as THREE from 'three'
 import { ROOM_ASSETS } from '../assets'
+import BrandLogo from './BrandLogo'
 import {
   DEFAULT_FOV,
   lonLatToSphere,
@@ -25,6 +26,7 @@ type WalkthroughScreenProps = {
   currentRoom: RoomId
   onNavigate: (room: RoomId) => void
   onExit: () => void
+  onReturnToMasterplan: () => void
   audioControl?: ReactNode
 }
 
@@ -59,6 +61,7 @@ export default function WalkthroughScreen({
   currentRoom,
   onNavigate,
   onExit,
+  onReturnToMasterplan,
   audioControl,
 }: WalkthroughScreenProps) {
   const viewportRef = useRef<HTMLDivElement>(null)
@@ -163,14 +166,30 @@ export default function WalkthroughScreen({
       loaderRef.current.load(
         url,
         (texture) => {
-          texture.colorSpace = THREE.SRGBColorSpace
-          texture.anisotropy = rendererRef.current?.capabilities.getMaxAnisotropy() ?? 8
-          texture.generateMipmaps = true
-          texture.minFilter = THREE.LinearMipmapLinearFilter
-          texture.magFilter = THREE.LinearFilter
-          texturesRef.current.set(url, texture)
+          const maxSize = rendererRef.current?.capabilities.maxTextureSize ?? 4096
+          const image = texture.image as CanvasImageSource & { width: number; height: number }
+          let map: THREE.Texture = texture
+          if (image && Math.max(image.width, image.height) > maxSize) {
+            const scale = maxSize / Math.max(image.width, image.height)
+            const canvas = document.createElement('canvas')
+            canvas.width = Math.max(1, Math.floor(image.width * scale))
+            canvas.height = Math.max(1, Math.floor(image.height * scale))
+            const context = canvas.getContext('2d')
+            if (context) {
+              context.drawImage(image, 0, 0, canvas.width, canvas.height)
+              texture.dispose()
+              map = new THREE.CanvasTexture(canvas)
+            }
+          }
+          map.colorSpace = THREE.SRGBColorSpace
+          map.anisotropy = rendererRef.current?.capabilities.getMaxAnisotropy() ?? 8
+          map.generateMipmaps = true
+          map.minFilter = THREE.LinearMipmapLinearFilter
+          map.magFilter = THREE.LinearFilter
+          map.needsUpdate = true
+          texturesRef.current.set(url, map)
           loadingUrlsRef.current.delete(url)
-          resolve(texture)
+          resolve(map)
         },
         undefined,
         () => {
@@ -195,8 +214,9 @@ export default function WalkthroughScreen({
     const renderer = rendererRef.current
     const camera = cameraRef.current
     if (!viewport || !renderer || !camera) return
-    const width = viewport.clientWidth || window.innerWidth
-    const height = viewport.clientHeight || window.innerHeight
+    const visual = window.visualViewport
+    const width = Math.round(viewport.clientWidth || visual?.width || window.innerWidth)
+    const height = Math.round(viewport.clientHeight || visual?.height || window.innerHeight)
     if (width < 8 || height < 8) return
     camera.aspect = width / height
     camera.updateProjectionMatrix()
@@ -247,6 +267,8 @@ export default function WalkthroughScreen({
     const observer = new ResizeObserver(resizeRenderer)
     observer.observe(viewport)
     window.addEventListener('orientationchange', resizeRenderer)
+    window.addEventListener('fullscreenchange', resizeRenderer)
+    window.addEventListener('webkitfullscreenchange', resizeRenderer)
     window.visualViewport?.addEventListener('resize', resizeRenderer)
 
     return () => {
@@ -254,6 +276,8 @@ export default function WalkthroughScreen({
       window.cancelAnimationFrame(frame)
       observer.disconnect()
       window.removeEventListener('orientationchange', resizeRenderer)
+      window.removeEventListener('fullscreenchange', resizeRenderer)
+      window.removeEventListener('webkitfullscreenchange', resizeRenderer)
       window.visualViewport?.removeEventListener('resize', resizeRenderer)
       geometry.dispose()
       material.dispose()
@@ -455,9 +479,12 @@ export default function WalkthroughScreen({
       )}
 
       <div className="walkthrough-topbar">
-        <button type="button" className="exit-walkthrough" onClick={onExit}>
-          ← Exit Walkthrough
-        </button>
+        <div className="walkthrough-topbar-left">
+          <BrandLogo onReturnToMasterplan={onReturnToMasterplan} />
+          <button type="button" className="exit-walkthrough" onClick={onExit}>
+            ← Exit Walkthrough
+          </button>
+        </div>
         <div className="walkthrough-topbar-right">
           {audioControl}
           <button type="button" className="reset-view" onClick={resetView}>

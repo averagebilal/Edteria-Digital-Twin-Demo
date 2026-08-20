@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { ASSETS } from '../assets'
+import BrandLogo from './BrandLogo'
 
 type LandscapeGuardProps = {
   children: ReactNode
@@ -28,6 +28,8 @@ export default function LandscapeGuard({
     update()
     window.addEventListener('resize', update)
     window.addEventListener('orientationchange', update)
+    window.addEventListener('fullscreenchange', update)
+    window.addEventListener('webkitfullscreenchange', update)
     window.visualViewport?.addEventListener('resize', update)
     const media = window.matchMedia('(orientation: portrait)')
     media.addEventListener('change', update)
@@ -35,6 +37,8 @@ export default function LandscapeGuard({
     return () => {
       window.removeEventListener('resize', update)
       window.removeEventListener('orientationchange', update)
+      window.removeEventListener('fullscreenchange', update)
+      window.removeEventListener('webkitfullscreenchange', update)
       window.visualViewport?.removeEventListener('resize', update)
       media.removeEventListener('change', update)
     }
@@ -45,12 +49,7 @@ export default function LandscapeGuard({
       {children}
       {portrait && (
         <div className="orientation-overlay" role="alertdialog" aria-live="assertive">
-          <img
-            className="orientation-logo"
-            src={ASSETS.logo}
-            alt="ESTERIA"
-            draggable={false}
-          />
+          <BrandLogo className="orientation-logo" />
           <svg className="orientation-icon" viewBox="0 0 64 64" aria-hidden="true">
             <rect x="18" y="8" width="28" height="48" rx="6" fill="none" stroke="currentColor" strokeWidth="2.2" />
             <path d="M40 54h8a6 6 0 0 0 6-6V22" fill="none" stroke="currentColor" strokeWidth="2.2" />

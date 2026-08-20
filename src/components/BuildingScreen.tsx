@@ -10,6 +10,7 @@ import interactionMap from '../data/esteriaInteractionMap.json'
 import { getApartmentInfo } from '../data/apartmentCatalog'
 import type { BuildingMode, FloorId } from '../types'
 import ApartmentModal from './ApartmentModal'
+import BrandLogo from './BrandLogo'
 import Stage from './Stage'
 
 const FLOOR_IDS: FloorId[] = ['01', '02', '03', '04', '05']
@@ -26,9 +27,9 @@ type BuildingScreenProps = {
   onSelectFloor: (floor: FloorId) => void
   onHoverApartment: (id: string | null) => void
   onSelectApartment: (id: string) => void
-  onChangeFloor: () => void
   onCloseModal: () => void
   onStartWalkthrough: () => void
+  onReturnToMasterplan: () => void
 }
 
 function floorOpacity(id: FloorId, hoveredFloor: FloorId | null) {
@@ -55,9 +56,9 @@ export default function BuildingScreen({
   onSelectFloor,
   onHoverApartment,
   onSelectApartment,
-  onChangeFloor,
   onCloseModal,
   onStartWalkthrough,
+  onReturnToMasterplan,
 }: BuildingScreenProps) {
   const [visibleFloor, setVisibleFloor] = useState<FloorId | null>(selectedFloor)
   const [outgoingFloor, setOutgoingFloor] = useState<FloorId | null>(null)
@@ -197,12 +198,7 @@ export default function BuildingScreen({
           )}
         </svg>
       </Stage>
-      <img className="brand-logo" src={ASSETS.logo} alt="ESTERIA" draggable={false} />
-      {buildingMode === 'apartment-selection' && (
-        <button type="button" className="back-control change-floor" onClick={onChangeFloor}>
-          ← Change Floor
-        </button>
-      )}
+      <BrandLogo onReturnToMasterplan={onReturnToMasterplan} />
       {apartmentModalOpen && selectedApartment && (
         <ApartmentModal
           info={selectedInfo}

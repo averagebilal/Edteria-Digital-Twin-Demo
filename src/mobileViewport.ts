@@ -1,5 +1,4 @@
 const ROOT_ID = 'root'
-const SCROLL_ROOM = 28
 
 function isIOSDevice() {
   if (typeof navigator === 'undefined') return false
@@ -30,110 +29,82 @@ export function getViewportSize() {
   }
 }
 
-let chromeBaseline = 0
-let clampingScroll = false
-
 export function applyVisualViewportToRoot() {
   const root = document.getElementById(ROOT_ID)
   if (!root) return
   const { width, height } = getViewportSize()
   root.style.position = 'fixed'
-  root.style.top = '0px'
-  root.style.left = '0px'
-  root.style.width = '100%'
+  root.style.inset = '0'
+  root.style.width = '100vw'
   root.style.height = `${Math.max(height, 1)}px`
   document.documentElement.style.setProperty('--app-width', `${width}px`)
   document.documentElement.style.setProperty('--app-height', `${height}px`)
 }
 
-function clampChromeScroll() {
-  if (clampingScroll) return
-  if (!document.documentElement.classList.contains('chrome-scroll')) return
-  if (document.documentElement.classList.contains('chrome-locked')) {
-    if (window.scrollY !== 0) {
-      clampingScroll = true
-      window.scrollTo(0, 0)
-      clampingScroll = false
+export async function attemptImmersiveMode() {
+  const element = document.documentElement as HTMLElement & {
+    webkitRequestFullscreen?: () => Promise<void> | void
+  }
+
+  try {
+    if (document.fullscreenElement) return true
+
+    if (element.requestFullscreen && document.fullscreenEnabled !== false) {
+      try {
+        await element.requestFullscreen()
+        return true
+      } catch {
+        await element.requestFullscreen({ navigationUI: 'hide' })
+        return true
+      }
     }
-    return
+
+    if (element.webkitRequestFullscreen) {
+      await element.webkitRequestFullscreen()
+      return true
+    }
+  } catch {
+    // Fullscreen unsupported, rejected, or unavailable.
   }
-  if (window.scrollY > SCROLL_ROOM) {
-    clampingScroll = true
-    window.scrollTo(0, SCROLL_ROOM)
-    clampingScroll = false
-  }
+
+  return false
 }
 
-function maybeLockAfterChromeHide() {
-  if (!document.documentElement.classList.contains('chrome-scroll')) return
-  if (document.documentElement.classList.contains('chrome-locked')) return
-  const { height } = getViewportSize()
-  if (chromeBaseline > 0 && height >= chromeBaseline + 20) {
-    document.documentElement.classList.add('chrome-locked')
-    clampingScroll = true
-    window.scrollTo(0, 0)
-    clampingScroll = false
-  }
-}
-
-function onViewportChange() {
-  applyVisualViewportToRoot()
-  maybeLockAfterChromeHide()
-  clampChromeScroll()
+export function nudgeBrowserChrome() {
+  requestAnimationFrame(() => {
+    try {
+      window.scrollTo({ top: 1, behavior: 'smooth' })
+    } catch {
+      // Best-effort chrome collapse only.
+    }
+  })
 }
 
 export function subscribeVisualViewport(onChange: () => void) {
+  let frame = 0
   const handle = () => {
-    onViewportChange()
-    onChange()
+    applyVisualViewportToRoot()
+    if (frame) return
+    frame = window.requestAnimationFrame(() => {
+      frame = 0
+      onChange()
+    })
   }
-  const handleOrientation = () => {
-    chromeBaseline = 0
-    document.documentElement.classList.remove('chrome-locked')
-    handle()
-    chromeBaseline = getViewportSize().height
-  }
+
   applyVisualViewportToRoot()
   const visual = window.visualViewport
   visual?.addEventListener('resize', handle)
   visual?.addEventListener('scroll', handle)
   window.addEventListener('resize', handle)
-  window.addEventListener('orientationchange', handleOrientation)
-  window.addEventListener('scroll', handle, { passive: true })
+  window.addEventListener('orientationchange', handle)
+  window.addEventListener('fullscreenchange', handle)
+  window.addEventListener('webkitfullscreenchange', handle)
   return () => {
     visual?.removeEventListener('resize', handle)
     visual?.removeEventListener('scroll', handle)
     window.removeEventListener('resize', handle)
-    window.removeEventListener('orientationchange', handleOrientation)
-    window.removeEventListener('scroll', handle)
+    window.removeEventListener('orientationchange', handle)
+    window.removeEventListener('fullscreenchange', handle)
+    window.removeEventListener('webkitfullscreenchange', handle)
   }
-}
-
-export async function requestAppFullscreen() {
-  const node = document.documentElement as HTMLElement & {
-    webkitRequestFullscreen?: () => Promise<void> | void
-  }
-  if (document.fullscreenElement) return
-  try {
-    await node.requestFullscreen?.({ navigationUI: 'hide' })
-  } catch {
-    try {
-      await node.webkitRequestFullscreen?.()
-    } catch {
-      // Fullscreen is best-effort on iOS Safari.
-    }
-  }
-}
-
-export function enableSafariChromeScroll() {
-  document.documentElement.classList.add('chrome-scroll')
-  document.documentElement.classList.remove('chrome-locked')
-  chromeBaseline = getViewportSize().height
-  applyVisualViewportToRoot()
-}
-
-export function expandMobileChrome() {
-  if (isTouchUI()) enableSafariChromeScroll()
-  void requestAppFullscreen()
-  applyVisualViewportToRoot()
 }

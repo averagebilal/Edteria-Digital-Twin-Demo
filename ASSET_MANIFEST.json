@@ -1,6 +1,7 @@
 {
   "productionAssets": {
-    "logo": "/assets/branding/esteria-logo.svg",
+    "logo": "/assets/branding/LOGO.svg",
+    "startButton": "/assets/geometry/start-experience.svg",
     "masterplan": "/assets/masterplan/masterplan.webp",
     "building": "/assets/building/building-front.webp",
     "masterplanOverlay": "/assets/geometry/masterplan-building-overlay.svg",
